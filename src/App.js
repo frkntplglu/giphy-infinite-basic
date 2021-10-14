@@ -1,78 +1,79 @@
-import {useState, useEffect} from "react";
+import {useState, useEffect, useRef, useCallback} from "react";
 import './App.css';
 import ImageList from './components/ImageList';
 import Search from './components/Search';
-import axios from "axios";
+import useFetch from "./hooks/useFetch";
+
 
 function App() {
-  const [images, setImages] = useState([]);
-  const [offset, setOffset] = useState(0);
+
+  const [offset, setOffset] = useState(-25);
 
   const [query, setQuery] = useState("");
+  const [input, setInput] = useState("");
     const [select, setSelect] = useState(0);
+
+    const { list } = useFetch(query, offset);
+
+    const loadRef = useRef();
 
     const handleInput = e => {
         setSelect(0);
-        setQuery(e.target.value);
+        setInput(e.target.value);
     }
 
     const handleSelect = e => {
-        setQuery("");
+        setInput("");
         setSelect(e.target.value);
     }
 
     const handleClick = () => {
-        if(query.length > 0 && query.length < 3){
+        if(input.length > 0 && input.length < 3){
             alert("Query cannot be smaller than 3 characters");
             return;
         }
 
-        handleFetch(query, select, 0);
+        if(select === 0){
+          setQuery(input);
+        }else{
+          setQuery(select);
+        }
     }
   
-  const handleFetch = (query,select, offset = 0) => {
-    let actualQuery = "";
-
-    if(select === 0){
-      actualQuery = query;
-    }else{
-      actualQuery = select;
+  const handleObserver = useCallback((entries) => {
+    const target = entries[0];
+    if (target.isIntersecting ) {
+      setOffset((prev) => prev + 25);
     }
-    const url = `https://api.giphy.com/v1/gifs/search?api_key=f4nA7EJOnybwdpv9cnTsCG10bpEKm54g&q=${actualQuery}&limit=25&offset=${offset}&rating=g&lang=en`
-    axios.get(url)
-    .then((response) => {
-      console.log("images", images);
-      setImages(images => [...new Map([...images, ...response.data.data].map(image => [image["id"], image])).values()]);
-    }).catch(error => {
-      console.log(error)
-    })
-    
-  }
+  }, []);
 
-  const infiniteScroll = () => {
-    if(window.innerHeight + document.documentElement.scrollTop === document.documentElement.offsetHeight){
-      setOffset(prevOffset => prevOffset + 25);
-      handleFetch(query, select, offset)
-    }
-  }
 
   useEffect(() => {
-    window.addEventListener('scroll', infiniteScroll);
-
+    const options = {
+      root: null,
+      rootMargin: "20px",
+      threshold: 1
+    };
+    const observer = new IntersectionObserver(handleObserver, options);
+    if (loadRef.current) observer.observe(loadRef.current);
     return () => {
-      window.removeEventListener('scroll', infiniteScroll);
+      observer.disconnect();
     }
-  })
 
+    
+  },[handleObserver])
   return (
     <div className="App">
       <Search
        handleInput={handleInput}
        handleSelect={handleSelect}
        handleClick={handleClick}
-       query={query}
+       input={input}
        select={select} />
-      {images.length > 0 ? <ImageList images={images} /> : null}
+       {
+         list.length > 0 ? <ImageList images={list} /> : null
+       }
+      <div ref={loadRef}></div>
     </div>
   );
 }
